@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 # (C) 2014, Marijn Vriens <marijn@metronomo.cl>
 # GNU General Public License, version 3 or any later version
 
@@ -10,36 +10,40 @@ import csv
 import itertools
 import argparse
 
-class Entry(object):
+class Entry:
     """
-    I represent one entry.
+    Represents one entry.
     """
     def __init__(self, data):
         self._data = data
-        self._cleanUp()
-    def _cleanUp(self):
+        self._clean_up()
+
+    def _clean_up(self):
         self._data['amount'] = self._data['Bedrag (EUR)'].replace(',', '.')
+
     def keys(self):
         return self._data.keys()
+
     def __getattr__(self, item):
-        return self._data[item]
+        return self._data.get(item)
+
     def __getitem__(self, item):
-        return self._data[item]
+        return self._data.get(item)
 
 
-class CsvEntries(object):
-    def __init__(self, filedescriptor):
-        self._entries = csv.DictReader(filedescriptor)
+class CsvEntries:
+    def __init__(self, file_descriptor):
+        self._entries = csv.DictReader(file_descriptor, delimiter=';')
 
     def __iter__(self):
-        return itertools.imap(Entry, self._entries)
+        return map(Entry, self._entries)
 
 
-class QifEntries(object):
+class QifEntries:
     def __init__(self):
         self._entries = []
 
-    def addEntry(self, entry):
+    def add_entry(self, entry):
         """
         Add an entry to the list of entries in the statment.
         :param entry: A dictionary where each key is one of the keys of the statement.
@@ -58,19 +62,20 @@ class QifEntries(object):
         return "\n".join(data)
 
 
-class QifEntry(object):
+class QifEntry:
     def __init__(self, entry):
         self._entry = entry
         self._data = []
-        self.processing(self._data)
+        self._processing()
 
-    def processing(self, data):
-        data.append("D%s" % self._entry.Datum)
-        data.append("T%s" % self._amount_format())
-        if self._entry_type():
-            data.append('N%s' % self._entry_type())
-        data.append("M%s" % self._memo())
-        data.append("^")
+    def _processing(self):
+        self._data.append("D{}".format(self._entry.Datum))
+        self._data.append("T{}".format(self._amount_format()))
+        entry_type = self._entry_type()
+        if entry_type:
+            self._data.append('N{}'.format(entry_type))
+        self._data.append("M{}".format(self._memo()))
+        self._data.append("^")
 
     def serialize(self):
         """
@@ -173,27 +178,23 @@ class QifEntry(object):
             return None
 
 
-def main(filedescriptor, start, number):
+def main(file_descriptor, start, number):
     qif = QifEntries()
-    c = 0
-    for entry in CsvEntries(filedescriptor):
-        c += 1
+    for c, entry in enumerate(CsvEntries(file_descriptor), 1):
         if c >= start:
-            qif.addEntry(entry)
-            if number and c > start+number-2:
-               break
-    print qif.serialize()
+            qif.add_entry(entry)
+            if number and c > start + number - 1:
+                break
+    print(qif.serialize())
 
 def parse_cmdline():
-    parser = argparse.ArgumentParser(description="Convert ING banking statements in CSV format to QIF file for GnuCash.")
+    parser = argparse.ArgumentParser(description="Convert CSV banking statements to QIF format for GnuCash.")
     parser.add_argument("csvfile", metavar="CSV_FILE", help="The CSV file with banking statements.")
-    parser.add_argument("--start", type=int, metavar="NUMBER", default=0,
-                        help="The statement you want to start conversion at.")
-    parser.add_argument("--number", type=int, metavar="NUMBER", help="The number of startments to convert")
-    args = parser.parse_args()
-    return args
+    parser.add_argument("--start", type=int, metavar="NUMBER", default=1, help="The statement to start conversion at.")
+    parser.add_argument("--number", type=int, metavar="NUMBER", help="The number of statements to convert.")
+    return parser.parse_args()
 
 if __name__ == '__main__':
     args = parse_cmdline()
-    fd = open(args.csvfile, 'rb')
-    main(fd, args.start, args.number)
+    with open(args.csvfile, 'r', encoding='utf-8') as fd:
+        main(fd, args.start, args.number)
